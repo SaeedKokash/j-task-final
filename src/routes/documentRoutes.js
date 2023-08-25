@@ -19,13 +19,4 @@ router.post('/:id/reject', verifyToken.authenticate, documentController.reject);
 router.post('/:id/modifyAccept', verifyToken.authenticate, documentController.modifyAccept);
 router.post('/:id/modifyReject', verifyToken.authenticate, documentController.modifyReject);
 
-// POST /document: For the maker to create a new document.
-// GET /document/:id: To retrieve a document's information.
-// PUT /document/:id: To modify a document.
-// DELETE /document/:id: To delete a document.
-// POST /document/:id/deliver: To deliver a document to the maker.
-// POST /document/:id/accept: To handle acceptance of the document.
-// POST /document/:id/reject: To handle rejection of the document.
-// POST /document/:id/modify: To handle modification requests.
-
 module.exports = router;

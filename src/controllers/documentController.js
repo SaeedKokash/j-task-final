@@ -63,7 +63,7 @@ exports.delete = asyncHandler(async (req, res) => {
 }
 );
 
-exports.create = asyncHandler(async (req, res) => {
+exports.create = asyncHandler(async (req, res, next) => {
   const data = { ...req.body, makerId: req.userId, latestUser: 'maker', isMakerApproved: true, status: 'request to create' };
   const user = await User.findByPk(req.userId);
   
@@ -172,8 +172,16 @@ exports.deliver = asyncHandler(async (req, res) => {
   //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for deliver' });
   // }
 
+  // when all users approve the document, it is completed
+  if(document.isCheckerApproved === true && document.isMakerApproved === true && document.isMiddlemanApproved === true) {
+    console.log('7')
+    await document.update({ status: 'completed' });
+    notify(document.makerId, `Document with ID ${document.id} has been completed.`);
+    notify(document.checkerId, `Document with ID ${document.id} has been completed.`);
+  }
+
   // 1. middleman delivers to checker after acceptance
-  if ((document.status === 'accepted by middleman' || document.status === 'modification accepted by middleman') && document.latestUser === 'maker') {
+  else if ((document.status === 'accepted by middleman' || document.status === 'modification accepted by middleman' || document.status === 'accepted by maker') && document.latestUser === 'maker') {
     console.log('1')
     await document.update({ status: 'delivered to checker' });
     notify(document.makerId, `Document with ID ${document.id} has been delivered to the checker by ${user.role} for validation.`);
@@ -189,7 +197,7 @@ exports.deliver = asyncHandler(async (req, res) => {
   }
 
   // 3. middleman delivers to maker after acceptance
-  else if ((document.status === 'accepted by middleman' || document.status === 'modification accepted by middleman') && document.latestUser === 'checker') {
+  else if ((document.status === 'accepted by middleman' || document.status === 'modification accepted by middleman' || document.status === 'accepted by checker') && document.latestUser === 'checker') {
     console.log('3')
     await document.update({ status: 'delivered to maker' });
     notify(document.checkerId, `Document with ID ${document.id} has been delivered to the maker by ${user.role} for validation.`);

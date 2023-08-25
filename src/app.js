@@ -2,21 +2,15 @@
 
 const express = require('express');
 const dotenv = require('dotenv');
-
 const http = require('http');
 
 const socket = require('./socket');
-// const clientSimulator = require('./clientSimulator');
 const simulateClientConnection = require('./clientSimulator');
-
 const { sequelize } = require('./models');
-
 const errorHandler = require('./middleware/errorHandler');
 
 const documentRoutes = require('./routes/documentRoutes');
 const authRoutes = require('./routes/authRoutes');
-const middlemanRoutes = require('./routes/middlemanRoutes');
-const checkerRoutes = require('./routes/checkerRoutes');
 
 dotenv.config();
 
@@ -29,17 +23,13 @@ app.use(express.json());
 
 app.use('/api/documents', documentRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/middleman', middlemanRoutes);
-app.use('/api/checker', checkerRoutes);
-// app.use('/simulate', clientSimulator);
+
 app.get('/simulate-connect/:userId', (req, res) => {
   const userId = req.params.userId;
-  console.log(userId)
   simulateClientConnection(userId);
   res.send(`Simulated user with ID ${userId} connected to the server.`);
 });
 
-// Sample route
 app.get('/', (req, res) => {
   res.send('Document Workflow API');
 });

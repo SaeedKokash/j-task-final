@@ -1,23 +1,3 @@
-// let socketId = null;
-// let socketUserId = null;
-
-// module.exports.setSocketUserId = (id) => {
-//     socketUserId = id;
-// };
-
-// module.exports.getSocketUserId = () => {
-//     return socketUserId;
-// };
-
-// module.exports.setSocketId = (id) => {
-//     socketId = id;
-// };
-
-// module.exports.getSocketId = () => {
-//     return socketId;
-// };
-
-
 let socketMap = {};
 
 module.exports.setSocketId = (userId, id) => {

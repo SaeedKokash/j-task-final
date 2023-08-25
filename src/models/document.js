@@ -18,7 +18,6 @@ const Document = sequelize.define('Document', {
     allowNull: false
   },
   status: {
-    // type: DataTypes.ENUM('request to create', 'accepted by middleman and delivered to checker', 'approved by checker and ready to be returned to maker', 'returned to maker', 'rejected by checker for a reason', 'rejected by checker for a reason and returned to maker to be modified', 'modification requested by maker', 'modification requested by maker and delivered to checker'),
     type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'request to create'
@@ -28,11 +27,6 @@ const Document = sequelize.define('Document', {
     allowNull: false,
     defaultValue: 'maker'
   },
-  // beforeLatestUser: {
-  //   type: DataTypes.ENUM('maker', 'middleman', 'checker'),
-  //   allowNull: false,
-  //   defaultValue: 'maker'
-  // },
   isMakerApproved: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
