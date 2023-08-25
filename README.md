@@ -1,11 +1,5 @@
 # Jopacc backend task
 
-The IT Development team at JoPACC builds in-house tools that support the business teams and
-their operations. While we don't always write software, possessing skills in development and
-architectural design provides us with a unique outlook on other aspects of our work. Technical
-knowledge and experience are essential when designing, evaluating, and managing new
-technologies.
-
 We kindly request that you develop a Node.js application that implements a "maker-checker"
 workflow for creating documents. In this context, the "maker" initiates the document creation
 process, and the "checker" must approve the document or request revisions before finalizing
@@ -63,3 +57,71 @@ Bonus points for any of the following:
 - Version control
 - Code structure
 - Anything else you find to add value
+
+<hr>
+
+## Deployed Link
+
+It is deployed on heroku and can be accessed via the following  [link](https://jopacc-task-e58c9400fc1b.herokuapp.com/)
+
+## API Documentation
+
+The API documentation is available on [Postman](https://documenter.getpostman.com/view/22498839/2s9Y5YR2KH)
+
+## Flow Diagram
+
+The following flow diagram shows the basic flow of the application.
+![flow diagram](./assets/flow02.png)
+
+<hr>
+
+The following flow diagram shows the flow of the application with more complexity
+![flow diagram](./assets/flow01.png)
+
+## Sequence Diagram
+
+The following sequence diagram shows the basic flow of the application.
+![sequence diagram 02](./assets/sequence02.png)
+
+<hr>
+
+The following sequence diagram shows the flow of the application with more complexity
+![sequence diagram 01](./assets/sequence01.png)
+
+## User Stories
+
+The following user stories are implemented in the application.
+
+## Code Structure
+
+The code is structured in the following way:
+
+```
+├── app.js
+├── clientSimulator.js
+├── socket.js
+├── socketState.js
+├── package.json
+├── package-lock.json
+├── README.md
+├── .env
+├── .gitignore
+├── controllers
+│   ├── documentController.js
+│   └── authController.js
+├── middleware
+│   ├── authMiddleware.js
+│   ├── errorHandler.js
+│   └── VerifyToken.js
+├── models
+│   ├── document.js
+│   ├── index.js
+│   └── user.js
+├── routes
+│   ├── authRoutes.js
+│   └── documentRoutes.js
+└── utils
+    ├── asyncHandler.js
+    ├── logger.js
+    └── notifications.js
+```
