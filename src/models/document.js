@@ -28,6 +28,11 @@ const Document = sequelize.define('Document', {
     allowNull: false,
     defaultValue: 'maker'
   },
+  // beforeLatestUser: {
+  //   type: DataTypes.ENUM('maker', 'middleman', 'checker'),
+  //   allowNull: false,
+  //   defaultValue: 'maker'
+  // },
   isMakerApproved: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

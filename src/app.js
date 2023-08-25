@@ -57,6 +57,7 @@ io.on('connection', (socket) => {
     });
 });
 
+// sequelize.sync({force: true})
 sequelize.sync()
   .then(() => {
     server.listen(PORT, () => {

@@ -38,7 +38,7 @@ exports.delete = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.userId);
 
   if (user.role !== 'maker' && user.role !== 'checker') {
-    return res.status(403).json({ error: 'Only makers or checkers can update documents' });
+    return res.status(403).json({ error: 'Only makers or checkers can delete documents' });
   }
 
   const document = await Document.findByPk(id);
@@ -46,18 +46,34 @@ exports.delete = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Document not found' });
   }
 
-  notify(document.middlemanId, `Document with ID ${document.id} has been deleted by ${user.role}.`);
-  notify(document.checkerId, `Document with ID ${document.id} has been deleted by ${user.role}.`);
-  
+  const middlemanId = document.middlemanId;
+  const checkerId = document.checkerId;
+
+  // you cannot delete the document if it is delivered to the other user which is not me
+  if (document.latestUser === user.role && document.status === (`delivered to ${user.role === 'maker' ? 'checker' : 'maker'}`)) {
+    return res.status(403).json({ error: 'You cannot delete the document if it is delivered to the other user' });
+  }
+
   await document.destroy();
+
+  notify(middlemanId, `Document with ID ${document.id} has been deleted by ${user.role}.`);
+  notify(checkerId, `Document with ID ${document.id} has been deleted by ${user.role}.`);
 
   res.status(200).json({ message: 'Document deleted successfully' });
 }
 );
 
 exports.create = asyncHandler(async (req, res) => {
-  const data = { ...req.body, makerId: req.userId };
+  const data = { ...req.body, makerId: req.userId, latestUser: 'maker', isMakerApproved: true, status: 'request to create' };
   const user = await User.findByPk(req.userId);
+  
+  if(!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (!data.monetary_value || !data.title || !data.description || !data.middlemanId || !data.checkerId) {
+    return res.status(400).json({ error: 'Please provide all required fields' });
+  }
 
   const middleman = await User.findByPk(data.middlemanId);
   const checker = await User.findByPk(data.checkerId);
@@ -68,7 +84,7 @@ exports.create = asyncHandler(async (req, res) => {
 
   const document = await Document.create(data);
 
-  // Notify the middleman about the new document
+  // Notify other users about the new document
   notify(middleman.id, "New document created. Awaiting validation by middleman.");
   notify(checker.id, "New document created. Awaiting validation by middleman.");
 
@@ -77,9 +93,9 @@ exports.create = asyncHandler(async (req, res) => {
 
 exports.modify = asyncHandler(async (req, res) => {
 
-  const id = parseInt(req.params.id, 10);
-  const data = req.body;
-  const user = await User.findByPk(req.userId);
+    const id = parseInt(req.params.id, 10);
+    const data = req.body;
+    const user = await User.findByPk(req.userId);
 
   if (user.role !== 'maker' && user.role !== 'checker') {
     return res.status(403).json({ error: 'Only makers or checkers can modify documents' });
@@ -90,8 +106,12 @@ exports.modify = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Document not found' });
   }
 
-  // done
-  if (document.status === 'rejected by middleman and returned to maker' && user.role === 'maker') {
+  // if (document.status !== ('rejected by middleman and returned to maker' || 'modification rejected by middleman' || 'rejected by checker for a reason and returned to maker to be modified')) {
+  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification' });
+  // }
+
+  // 1. maker modifies
+  if ((document.status === 'delivered to maker') && user.role === 'maker') {
     document.status = 'modification requested by maker';
     document.latestUser = 'maker';
     document.isMakerApproved = true;
@@ -107,25 +127,8 @@ exports.modify = asyncHandler(async (req, res) => {
     notify(document.checkerId, `Document with ID ${document.id} has been modified by ${user.role}. Awaiting validation by middleman.`);
   }
 
-  // done
-  if (document.status === 'rejected by checker for a reason and returned to maker to be modified' && user.role === 'maker') {
-    document.status = 'modification requested by maker';
-    document.latestUser = 'maker';
-    document.isMakerApproved = true;
-    await document.update({ 
-      status: 'modification requested by maker',
-      latestUser: 'maker',
-      isMakerApproved: true,
-      monetary_value: data.monetary_value,
-      title: data.title,
-      description: data.description
-    });
-    notify(document.middlemanId, `Document with ID ${document.id} has been modified by ${user.role} and ready to be reviewed.`);
-    notify(document.checkerId, `Document with ID ${document.id} has been modified by ${user.role}. Awaiting validation by middleman.`);
-  }
-
-  // done
-  if (document.status === 'accepted by middleman and delivered to checker' && user.role === 'checker') {
+  // 2. checker modifies
+  else if (document.status === 'delivered to checker' && user.role === 'checker') {
     document.status = 'modification requested by checker';
     document.latestUser = 'checker';
     document.isCheckerApproved = true;
@@ -139,6 +142,10 @@ exports.modify = asyncHandler(async (req, res) => {
     });
     notify(document.middlemanId, `Document with ID ${document.id} has been modified by ${user.role} and ready to be reviewed.`); 
     notify(document.makerId, `Document with ID ${document.id} has been modified by ${user.role}. Awaiting validation by middleman.`);
+  }
+
+  else {
+    return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification' });
   }
 
   res.status(200).json({ document });
@@ -161,85 +168,60 @@ exports.deliver = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Document not found' });
   }
 
-  // done
-  if (document.status === ('request to create accepted by middleman' || 'modification accepted by middleman')) {
-    document.status = 'accepted by middleman and delivered to checker';
-    await document.update({ status: 'accepted by middleman and delivered to checker' });
+  // if(document.status !== ( 'accepted by middleman' || 'modification accepted by middleman' || 'rejected by middleman' || 'modification rejected by middleman')) {
+  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for deliver' });
+  // }
+
+  // 1. middleman delivers to checker after acceptance
+  if ((document.status === 'accepted by middleman' || document.status === 'modification accepted by middleman') && document.latestUser === 'maker') {
+    console.log('1')
+    await document.update({ status: 'delivered to checker' });
     notify(document.makerId, `Document with ID ${document.id} has been delivered to the checker by ${user.role} for validation.`);
     notify(document.checkerId, `Document with ID ${document.id} has been delivered by ${user.role} for validation.`);
   }
 
-  // done
-  if ( document.status === 'approved by checker and ready to be returned to maker' ) {
-    document.status = 'document created and returned to maker';
-    document.latestUser = 'middleman';
-    await document.update({ status: 'document created and returned to maker', latestUser: 'middleman' });
-    notify(document.makerId, `Document with ID ${document.id} has been created and delivered by ${user.role}.`);
-    notify(document.checkerId, `Document with ID ${document.id} has been created and delivered by ${user.role} to the maker.`);
+  // 2. middleman delivers to checker after rejection 
+  else if ((document.status === 'rejected by middleman' || document.status === 'modification rejected by middleman' || document.status === 'rejected by maker') && document.latestUser === 'maker') {
+    console.log('2')
+    await document.update({ status: 'delivered to checker' });
+    notify(document.makerId, `Document with ID ${document.id} has been delivered to the checker by ${user.role} for modification.`);
+    notify(document.checkerId, `Document with ID ${document.id} has been delivered by ${user.role} for modification.`);
   }
 
-  // done
-  if (document.status === 'request to create rejected by middleman') {
-    document.status = 'rejected by middleman and returned to maker';
-    await document.update({ status: 'rejected by middleman and returned to maker' });
-    notify(document.makerId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
-    notify(document.checkerId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to maker to be modified.`);
+  // 3. middleman delivers to maker after acceptance
+  else if ((document.status === 'accepted by middleman' || document.status === 'modification accepted by middleman') && document.latestUser === 'checker') {
+    console.log('3')
+    await document.update({ status: 'delivered to maker' });
+    notify(document.checkerId, `Document with ID ${document.id} has been delivered to the maker by ${user.role} for validation.`);
+    notify(document.makerId, `Document with ID ${document.id} has been delivered by ${user.role} for validation.`);
   }
 
-  // done but do not need
-  // if (document.status === 'modification accepted by middleman') {
-  //   document.status = 'modification accepted by middleman and delivered to checker';
-  //   await document.update({ status: 'modification accepted by middleman and delivered to checker' });
-  //   notify(document.makerId, `Document with ID ${document.id} has been accepted by ${user.role} and delivered to checker.`);
-  //   notify(document.checkerId, `Document with ID ${document.id} has been accepted and delivered by ${user.role}.`);
-  // }
-
-  // done
-  if ( document.status === 'rejected by checker for a reason' ) {
-    document.status = 'rejected by checker for a reason and returned to maker to be modified';
-    document.latestUser = 'middleman';
-    document.isMiddlemanApproved = false;
-    await document.update({ status: 'rejected by checker for a reason and returned to maker to be modified', latestUser: 'middleman', isMiddlemanApproved: false });
-    notify(document.makerId, `Document with ID ${document.id} has been delivered by ${user.role} to be modified.`);
+  // 4. middleman delivers to maker after rejection
+  else if ((document.status === 'rejected by middleman' || document.status === 'modification rejected by middleman' || document.status === 'rejected by checker') && document.latestUser === 'checker') {
+    console.log('4')
+    await document.update({ status: 'delivered to maker' });
     notify(document.checkerId, `Document with ID ${document.id} has been delivered to the maker by ${user.role} for modification.`);
+    notify(document.makerId, `Document with ID ${document.id} has been delivered by ${user.role} for modification.`);
   }
 
-  if ( document.status === 'modification requested by maker' ) {
-    document.status = 'modification requested by maker and delivered to checker';
-    document.latestUser = 'middleman';
-    document.isMiddlemanApproved = true;
-    await document.update({ status: 'modification requested by maker and delivered to checker', latestUser: 'middleman', isMiddlemanApproved: true });
-    notify(document.makerId, `Document with ID ${document.id} has been delivered by ${user.role}. Awaiting validation by checker.`);
-    notify(document.checkerId, `Document with ID ${document.id} has been modified by maker, delivered by ${user.role} and ready to be reviewed.`);
+  // 5. specialcase 1. middleman delivers to maker after rejection by maker
+  else if (document.status === 'modification from maker rejected by middleman' && document.latestUser === 'middleman') {
+    console.log('5')
+    await document.update({ status: 'delivered to maker', latestUser: 'maker' });
+    notify(document.checkerId, `Document with ID ${document.id} has been delivered to the maker by ${user.role} for modification.`);
+    notify(document.makerId, `Document with ID ${document.id} has been delivered by ${user.role} for modification.`);
   }
 
-  if (document.status === 'modification accepted by checker' ) {
-    document.status = 'modification accepted by checker and middleman and delivered to maker';
-    document.latestUser = 'middleman';
-    document.isMiddlemanApproved = true;
-    await document.update({ status: 'modification accepted by checker and middleman and delivered to maker', latestUser: 'middleman', isMiddlemanApproved: true });
-    notify(document.makerId, `Modification of document with ID ${document.id} has been accepted and delivered by ${user.role}.`);
-    notify(document.checkerId, `Modification of document with ID ${document.id} has been accepted and delivered by ${user.role} to the maker.`);
+  // 6. specialcase 2. middleman delivers to checker after rejection by checker
+  else if (document.status === 'modification from checker rejected by middleman' && document.latestUser === 'middleman') {
+    console.log('6')
+    await document.update({ status: 'delivered to checker', latestUser: 'checker' });
+    notify(document.makerId, `Document with ID ${document.id} has been delivered to the checker by ${user.role} for modification.`);
+    notify(document.checkerId, `Document with ID ${document.id} has been delivered by ${user.role} for modification.`);
   }
 
-  // done
-  if (document.status === 'modification requested by checker' ) {
-    document.status = 'modification requested by checker and delivered to maker'; 
-    document.latestUser = 'middleman';
-    document.isMiddlemanApproved = true;
-    await document.update({ status: 'modification requested by checker and delivered to maker', latestUser: 'middleman', isMiddlemanApproved: true });
-    notify(document.makerId, `Modification of document with ID ${document.id} has been accepted and delivered by ${user.role}.`);
-    notify(document.checkerId, `Modification of document with ID ${document.id} has been accepted and delivered by ${user.role} to the maker.`);
-  }
-
-  // done
-  if (document.status === 'modification rejected by maker' ) {
-    document.status = 'modification rejected by maker and returned to checker';
-    document.latestUser = 'middleman';
-    document.isMiddlemanApproved = false;
-    await document.update({ status: 'modification rejected by maker and returned to checker', latestUser: 'middleman', isMiddlemanApproved: false });
-    notify(document.makerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
-    notify(document.checkerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to maker to be modified.`);
+  else {
+    return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for deliver' });
   }
 
   res.status(200).json({ document });
@@ -255,21 +237,37 @@ exports.accept = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Document not found' });
   }
 
-  // done
+  if (user.role === document.latestUser) {
+    return res.status(403).json({ error: 'You cannot accept your own document' });
+  }
+
+  // if(document.status !== ('request to create' || 'delivered to checker' || 'delivered to maker')) {
+  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for acceptance' });
+  // }
+
+  // 1. middleman accepts
   if (document.status === 'request to create' && user.role === 'middleman') {
-    document.status = 'request to create accepted by middleman';
-    document.latestUser = 'middleman';
-    document.isMiddlemanApproved = true;
-    await document.update({ status: 'request to create accepted by middleman', latestUser: 'middleman', isMiddlemanApproved: true });
+    await document.update({ status: 'accepted by middleman', isMiddlemanApproved: true });
     notify(document.makerId, `Document with ID ${document.id} has been accepted by ${user.role}. Awaiting validation by checker.`);
     notify(document.checkerId, `Document with ID ${document.id} has been accepted by ${user.role}.`);
   }
 
-  // done
-  if (document.status === 'accepted by middleman and delivered to checker' && user.role === 'checker') {
-    await document.update({ status: 'approved by checker and ready to be returned to maker', latestUser: 'checker', isCheckerApproved: true });
+  // 2. checker accepts
+  else if (document.status === 'delivered to checker' && user.role === 'checker') {
+    await document.update({ status: 'accepted by checker', latestUser: 'checker', isCheckerApproved: true });
     notify(document.makerId, `Document with ID ${document.id} has been accepted by ${user.role}.`);
     notify(document.middlemanId, `Document with ID ${document.id} has been accepted by ${user.role}.`);
+  }
+
+   // 3. maker accepts
+   else if (document.status === 'delivered to maker' && user.role === 'maker') {
+    await document.update({ status: 'accepted by maker', latestUser: 'maker', isCheckerApproved: true });
+    notify(document.checkerId, `Document with ID ${document.id} has been accepted by ${user.role}.`);
+    notify(document.middlemanId, `Document with ID ${document.id} has been accepted by ${user.role}.`);
+  }
+
+  else {
+    return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for acceptance' });
   }
 
   res.status(200).json({ document });
@@ -285,21 +283,37 @@ exports.reject = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Document not found' });
   }
 
-  // done
+  if (user.role === document.latestUser) {
+    return res.status(403).json({ error: 'You cannot reject your own document' });
+  }
+
+  // if(document.status !== ('request to create' || 'delivered to checker' || 'delivered to maker')) {
+  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for rejection' });
+  // }
+
+  // 1. middleman rejects
   if (document.status === 'request to create' && user.role === 'middleman') {
-    document.status = 'request to create rejected by middleman';
-    document.latestUser = 'middleman';
-    document.isMiddlemanApproved = false;
-    await document.update({ status: 'request to create rejected by middleman', latestUser: 'middleman', isMiddlemanApproved: false });
+    await document.update({ status: 'rejected by middleman', isMiddlemanApproved: false });
     notify(document.makerId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
     notify(document.checkerId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to maker to be modified.`);
   }
 
-  // done
-  if (document.status === 'accepted by middleman and delivered to checker' && user.role === 'checker') {
-    await document.update({ status: 'rejected by checker for a reason', latestUser: 'checker', isCheckerApproved: false });
+  // 2. checker rejects
+  else if (document.status === 'delivered to checker' && user.role === 'checker') {
+    await document.update({ status: 'rejected by checker', latestUser: 'checker', isCheckerApproved: false });
     notify(document.makerId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
     notify(document.middlemanId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to maker to be modified.`);
+  }
+
+  // 3. maker rejects
+  else if (document.status === 'adelivered to maker' && user.role === 'maker') {
+    await document.update({ status: 'rejected by maker', latestUser: 'maker', isCheckerApproved: false });
+    notify(document.checkerId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
+    notify(document.middlemanId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to checker to be modified.`);
+  }
+
+  else {
+    return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for rejection' });
   }
 
   res.status(200).json({ document });
@@ -320,24 +334,33 @@ exports.modifyAccept = asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'You cannot accept your own modifications' });
   }
 
-  // done
-  if(document.status === 'modification requested by maker' && user.role === 'middleman') {
-    await document.update({ status: 'modification accepted by middleman', latestUser: 'middleman', isMiddlemanApproved: true });
+  // if(document.status !== ('modification requested by maker' || 'modification requested by checker' || 'delivered to checker' || 'delivered to maker')) {
+  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification acceptance' });
+  // }
+
+  // 1. middleman accepts modifications
+  if((document.status === 'modification requested by maker' || document.status === 'modification requested by checker') && user.role === 'middleman') {
+    await document.update({ status: 'modification accepted by middleman', isMiddlemanApproved: true });
     notify(document.makerId, `Modification of document with ID ${document.id} has been accepted by ${user.role}. Awaiting validation by checker.`);
     notify(document.checkerId, `Modification of document with ID ${document.id} has been accepted by ${user.role}. Awaiting to be delivered by middleman.`);
   }
 
-  if(document.status === 'modification requested by maker and delivered to checker' && user.role === 'checker') {
+  // 2. checker accepts modifications
+  else if(document.status === 'delivered to checker' && user.role === 'checker') {
     await document.update({ status: 'modification accepted by checker', latestUser: 'checker', isCheckerApproved: true });
     notify(document.makerId, `Modification of document with ID ${document.id} has been accepted by ${user.role}. Awaiting validation by middleman.`);
     notify(document.middlemanId, `Modification of document with ID ${document.id} has been accepted by ${user.role}. Awaiting validation by middleman.`);
   }
 
-  // done
-  if(document.status === 'modification requested by checker and delivered to maker' && user.role === 'maker') {
+  // 3. maker accepts modifications
+  else if(document.status === 'delivered to maker' && user.role === 'maker') {
     await document.update({ status: 'modification accepted by maker', latestUser: 'maker', isMakerApproved: true });
-    notify(document.makerId, `Modification of document with ID ${document.id} has been accepted by ${user.role}. Awaiting validation by middleman.`);
+    notify(document.checkerId, `Modification of document with ID ${document.id} has been accepted by ${user.role}. Awaiting validation by middleman.`);
     notify(document.middlemanId, `Modification of document with ID ${document.id} has been accepted by ${user.role}. Awaiting validation by middleman.`);
+  }
+
+  else {
+    return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification acceptance' });
   }
 
   res.status(200).json({ document });
@@ -349,28 +372,48 @@ exports.modifyReject = asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const user = await User.findByPk(req.userId);
 
-  if (user.role !== 'middleman' && user.role !== 'checker') {
-    return res.status(403).json({ error: 'Only middleman or checkers can reject modifications' });
-  }
-
   const document = await Document.findByPk(id);
   if (!document) {
     return res.status(404).json({ error: 'Document not found' });
-  }
-
-  if(document.status !== 'pending review') {
-    return res.status(403).json({ error: 'Document is not pending review so it cannot be modified' });
   }
 
   if (user.role === document.latestUser) {
     return res.status(403).json({ error: 'You cannot reject your own modifications' });
   }
 
-  // done
-   if(document.status === 'modification requested by checker and delivered to maker' && user.role === 'maker') {
-    await document.update({ status: 'modification rejected by maker', latestUser: 'maker', isMakerApproved: false });
+  // if(document.status !== ('modification requested by maker' || 'modification requested by checker' || 'delivered to checker' || 'delivered to maker')) {
+  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification rejection' });
+  // }
+
+  // 1. middleman rejects modifications
+  if(document.status === 'modification requested by maker' && user.role === 'middleman') {
+    await document.update({ status: 'modification from maker rejected by middleman', isMiddlemanApproved: false, latestUser: 'middleman' });
+    notify(document.makerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
+    notify(document.checkerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to maker to be modified.`);
+  } 
+
+  else if (document.status === 'modification requested by checker' && user.role === 'middleman') {
+    await document.update({ status: 'modification from checker rejected by middleman', isMiddlemanApproved: false, latestUser: 'middleman' });
+    notify(document.makerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to checker to be modified.`);
+    notify(document.checkerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
+  } 
+
+  // 2. checker rejects modifications
+  else if(document.status === 'delivered to checker' && user.role === 'checker') {
+    await document.update({ status: 'modification rejected by checker', latestUser: 'checker', isMakerApproved: false });
     notify(document.makerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
     notify(document.middlemanId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to maker to be modified.`);
+  }
+
+   // 3. maker rejects modifications
+  else if(document.status === 'delivered to maker' && user.role === 'maker') {
+    await document.update({ status: 'modification rejected by maker', latestUser: 'maker', isMakerApproved: false });
+    notify(document.checkerId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to be modified.`);
+    notify(document.middlemanId, `Modification of document with ID ${document.id} has been rejected by ${user.role} for a reason and returned to checker to be modified.`);
+  } 
+  
+  else {
+    return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification rejection' });
   }
 
   res.status(200).json({ document });
