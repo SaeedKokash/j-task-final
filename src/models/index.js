@@ -6,9 +6,11 @@ const dotenv = require("dotenv");
 dotenv.config();
 const DATABASE_URL = process.env.DATABASE_URL;
 
+let sequelize;
+
 // for production
 if (process.env.NODE_ENV === "production") {
-  const sequelizeOptions = {
+  let sequelizeOptions = {
     dialectOptions: {
       ssl: {
         require: true,
@@ -17,12 +19,13 @@ if (process.env.NODE_ENV === "production") {
     },
   };
 
-  const sequelize = new Sequelize(DATABASE_URL, sequelizeOptions);
+  sequelize = new Sequelize(DATABASE_URL, sequelizeOptions);
 }
 
 // for development
 if (process.env.NODE_ENV === "development") {
-  const sequelizeOptions = {};
-  const sequelize = new Sequelize(DATABASE_URL, sequelizeOptions);
+  let sequelizeOptions = {};
+  sequelize = new Sequelize(DATABASE_URL, sequelizeOptions);
 }
+
 module.exports = { sequelize };
