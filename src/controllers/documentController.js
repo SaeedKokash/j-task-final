@@ -49,7 +49,6 @@ exports.delete = asyncHandler(async (req, res) => {
   const middlemanId = document.middlemanId;
   const checkerId = document.checkerId;
 
-  // you cannot delete the document if it is delivered to the other user which is not me
   if (document.latestUser === user.role && document.status === (`delivered to ${user.role === 'maker' ? 'checker' : 'maker'}`)) {
     return res.status(403).json({ error: 'You cannot delete the document if it is delivered to the other user' });
   }
@@ -84,7 +83,6 @@ exports.create = asyncHandler(async (req, res, next) => {
 
   const document = await Document.create(data);
 
-  // Notify other users about the new document
   notify(middleman.id, "New document created. Awaiting validation by middleman.");
   notify(checker.id, "New document created. Awaiting validation by middleman.");
 
@@ -105,10 +103,6 @@ exports.modify = asyncHandler(async (req, res) => {
   if (!document) {
     return res.status(404).json({ error: 'Document not found' });
   }
-
-  // if (document.status !== ('rejected by middleman and returned to maker' || 'modification rejected by middleman' || 'rejected by checker for a reason and returned to maker to be modified')) {
-  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification' });
-  // }
 
   // 1. maker modifies
   if ((document.status === 'delivered to maker') && user.role === 'maker') {
@@ -167,10 +161,6 @@ exports.deliver = asyncHandler(async (req, res) => {
   if (!document) {
     return res.status(404).json({ error: 'Document not found' });
   }
-
-  // if(document.status !== ( 'accepted by middleman' || 'modification accepted by middleman' || 'rejected by middleman' || 'modification rejected by middleman')) {
-  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for deliver' });
-  // }
 
   // when all users approve the document, it is completed
   if(document.isCheckerApproved === true && document.isMakerApproved === true && document.isMiddlemanApproved === true) {
@@ -249,10 +239,6 @@ exports.accept = asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'You cannot accept your own document' });
   }
 
-  // if(document.status !== ('request to create' || 'delivered to checker' || 'delivered to maker')) {
-  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for acceptance' });
-  // }
-
   // 1. middleman accepts
   if (document.status === 'request to create' && user.role === 'middleman') {
     await document.update({ status: 'accepted by middleman', isMiddlemanApproved: true });
@@ -294,10 +280,6 @@ exports.reject = asyncHandler(async (req, res) => {
   if (user.role === document.latestUser) {
     return res.status(403).json({ error: 'You cannot reject your own document' });
   }
-
-  // if(document.status !== ('request to create' || 'delivered to checker' || 'delivered to maker')) {
-  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for rejection' });
-  // }
 
   // 1. middleman rejects
   if (document.status === 'request to create' && user.role === 'middleman') {
@@ -342,10 +324,6 @@ exports.modifyAccept = asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'You cannot accept your own modifications' });
   }
 
-  // if(document.status !== ('modification requested by maker' || 'modification requested by checker' || 'delivered to checker' || 'delivered to maker')) {
-  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification acceptance' });
-  // }
-
   // 1. middleman accepts modifications
   if((document.status === 'modification requested by maker' || document.status === 'modification requested by checker') && user.role === 'middleman') {
     await document.update({ status: 'modification accepted by middleman', isMiddlemanApproved: true });
@@ -388,10 +366,6 @@ exports.modifyReject = asyncHandler(async (req, res) => {
   if (user.role === document.latestUser) {
     return res.status(403).json({ error: 'You cannot reject your own modifications' });
   }
-
-  // if(document.status !== ('modification requested by maker' || 'modification requested by checker' || 'delivered to checker' || 'delivered to maker')) {
-  //   return res.status(403).json({ error: 'It is not your turn, waiting for document to be ready for modification rejection' });
-  // }
 
   // 1. middleman rejects modifications
   if(document.status === 'modification requested by maker' && user.role === 'middleman') {
