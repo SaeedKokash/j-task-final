@@ -53,7 +53,12 @@ const Document = sequelize.define('Document', {
   checkerId: {
     type: DataTypes.INTEGER,
     allowNull: false
-  }
+  },
+  toBeModified: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
 });
 
 Document.belongsTo(User, { as: 'Maker', foreignKey: 'makerId' });
