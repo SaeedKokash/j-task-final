@@ -123,25 +123,6 @@ exports.modify = asyncHandler(async (req, res) => {
     notify(document.checkerId, `Document with ID ${document.id} has been modified by ${user.role}. Awaiting validation by middleman.`);
   }
 
-  // 1. maker modifies
-  else if ((document.status === 'delivered to maker') && user.role === 'maker') {
-    document.status = 'modification requested by maker';
-    document.latestUser = 'maker';
-    document.isMakerApproved = true;
-    await document.update({ 
-      status: 'modification requested by maker',
-      latestUser: 'maker',
-      isMakerApproved: true,
-      isCheckerApproved: false,
-      isMiddlemanApproved: false,
-      monetary_value: data.monetary_value,
-      title: data.title,
-      description: data.description
-    });
-    notify(document.middlemanId, `Document with ID ${document.id} has been modified by ${user.role} and ready to be reviewed.`);
-    notify(document.checkerId, `Document with ID ${document.id} has been modified by ${user.role}. Awaiting validation by middleman.`);
-  }
-
   // 2. checker modifies
   else if (document.status === 'delivered to checker' && user.role === 'checker') {
     document.status = 'modification requested by checker';
@@ -185,7 +166,6 @@ exports.deliver = asyncHandler(async (req, res) => {
 
   // when all users approve the document, it is completed
   if(document.isCheckerApproved === true && document.isMakerApproved === true && document.isMiddlemanApproved === true) {
-    console.log('7')
     await document.update({ status: 'completed' });
     notify(document.makerId, `Document with ID ${document.id} has been completed.`);
     notify(document.checkerId, `Document with ID ${document.id} has been completed.`);
@@ -338,7 +318,7 @@ exports.reject = asyncHandler(async (req, res) => {
   }
 
   // 3. maker rejects
-  else if (document.status === 'adelivered to maker' && user.role === 'maker') {
+  else if (document.status === 'delivered to maker' && user.role === 'maker') {
     await document.update({ status: 'rejected by maker', latestUser: 'maker', isCheckerApproved: false });
     notify(document.checkerId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and will be returned.`);
     notify(document.middlemanId, `Document with ID ${document.id} has been rejected by ${user.role} for a reason and will be returned to checker.`);

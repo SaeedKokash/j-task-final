@@ -77,6 +77,8 @@ The API documentation is available on [Postman](https://documenter.getpostman.co
 
 ## User Story
 
+### Get Started
+
 1. Create 3 Accounts, Maker, Middleman, and Checker.
 1. Login with the 3 accounts using Basic Auth and get the token.
 1. copy paste the token in the Authorization header as Bearer Token for each request.
@@ -153,9 +155,7 @@ The following sequence diagram shows the basic flow of the application.
 The following sequence diagram shows the flow of the application with more complexity
 ![sequence diagram 01](./assets/sequence01.png)
 
-## User Stories
 
-The following user stories are implemented in the application.
 
 ## Code Structure
 
