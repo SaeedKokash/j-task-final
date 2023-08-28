@@ -68,6 +68,71 @@ It is deployed on heroku and can be accessed via the following  [link](https://j
 
 The API documentation is available on [Postman](https://documenter.getpostman.com/view/22498839/2s9Y5YR2KH)
 
+## environment variables
+
+- DATABASE_URL="postgres://postgres:postgres@localhost:5432/jopacc"
+- PORT=4000
+- SECRET_KEY="supersecret"
+- NODE_ENV="development"
+
+## User Story
+
+1. Create 3 Accounts, Maker, Middleman, and Checker.
+1. Login with the 3 accounts using Basic Auth and get the token.
+1. copy paste the token in the Authorization header as Bearer Token for each request.
+1. Simulate Socket Connection for each User to receive notifications.
+1. Follow the following scenarios to test the application.
+
+<hr>
+
+Scenario 1 (Document Accepted)
+
+1. Create Document -> Maker
+1. Accepted by Middleman -> Middleman
+1. Delivery by Middleman to Checker -> Middleman
+1. Accepted by Checker -> Checker
+1. Delivery by Middleman to Maker -> Middleman
+
+Scenario 2 (Document Rejected by Middleman)
+
+1. Create Document -> Maker
+1. Rejected by Middleman -> Middleman
+1. Delivery by Middleman to Maker -> Middleman
+
+Scenario 3 (Document Rejected by Checker)
+
+1. Create Document -> Maker
+1. Accepted by Middleman -> Middleman
+1. Delivery by Middleman to Checker -> Middleman
+1. Rejected by Checker -> Checker
+1. Rejected by Middleman -> Middleman
+1. Delivery by Middleman to Maker -> Middleman
+
+Scenario 4 (Document Modified by Checker)
+
+1. Create Document -> Maker
+1. Accepted by Middleman -> Middleman
+1. Delivery by Middleman to Checker -> Middleman
+1. Modified by Checker -> Checker
+1. Accepted by Middleman -> Middleman
+1. Delivery by Middleman to Maker -> Middleman
+1. Accepted by Maker -> Maker
+1. Delivery by Middleman -> Middleman
+
+Scenario 5 (Document Rejected by Checker for Modification)
+
+1. Create Document -> Maker
+1. Accepted by Middleman -> Middleman
+1. Delivery by Middleman to Checker -> Middleman
+1. Rejected by Checker and Requested Modification -> Checker
+1. Rejected by Middleman -> Middleman
+1. Delivery by Middleman to Maker -> Middleman
+1. Modified by Maker -> Maker
+1. Accepted by Middleman -> Middleman
+1. Delivery by Middleman to Checker -> Middleman
+1. Accepted by Checker -> Checker
+1. Delivery by Middleman to Maker -> Middleman
+
 ## Flow Diagram
 
 The following flow diagram shows the basic flow of the application.

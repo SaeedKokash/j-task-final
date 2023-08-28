@@ -18,5 +18,6 @@ router.post('/:id/accept', verifyToken.authenticate, documentController.accept);
 router.post('/:id/reject', verifyToken.authenticate, documentController.reject);
 router.post('/:id/modifyAccept', verifyToken.authenticate, documentController.modifyAccept);
 router.post('/:id/modifyReject', verifyToken.authenticate, documentController.modifyReject);
+router.post('/:id/requestModify', verifyToken.authenticate, documentController.requestModify);
 
 module.exports = router;
